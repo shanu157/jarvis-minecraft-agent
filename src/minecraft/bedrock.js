@@ -5,54 +5,122 @@ export class BedrockAgent {
     this.config = config;
     this.client = null;
     this.connected = false;
+    this.connecting = false;
+    this.lastError = null;
+    this.lastEvent = null;
   }
 
   async connect() {
     if (this.connected) {
-      return { connected: true };
+      return {
+        connected: true,
+        host: this.config.minecraft.host,
+        port: this.config.minecraft.port
+      };
     }
 
-    /*
-     * Authentication will be added after the cloud host is ready.
-     *
-     * IMPORTANT:
-     * Do not put a Microsoft password, refresh token, or other
-     * private credential into GitHub.
-     */
+    if (this.connecting) {
+      return {
+        connected: false,
+        connecting: true,
+        host: this.config.minecraft.host,
+        port: this.config.minecraft.port
+      };
+    }
 
-    this.client = createClient({
-      host: this.config.minecraft.host,
-      port: this.config.minecraft.port,
-      version: this.config.minecraft.version
-    });
+    this.connecting = true;
+    this.lastError = null;
+    this.lastEvent = "connecting";
 
-    this.client.on("connect", () => {
-      this.connected = true;
-      console.log("[Minecraft] connected");
-    });
+    try {
+      console.log(
+        `[Minecraft] connecting to ${this.config.minecraft.host}:${this.config.minecraft.port}`
+      );
 
-    this.client.on("disconnect", (packet) => {
+      this.client = createClient({
+        host: this.config.minecraft.host,
+        port: this.config.minecraft.port,
+        version: this.config.minecraft.version
+      });
+
+      await new Promise((resolve, reject) => {
+        let settled = false;
+
+        const finish = (fn, value) => {
+          if (settled) return;
+          settled = true;
+          fn(value);
+        };
+
+        this.client.once("connect", () => {
+          this.connected = true;
+          this.connecting = false;
+          this.lastEvent = "connected";
+          this.lastError = null;
+
+          console.log("[Minecraft] connected");
+
+          finish(resolve, true);
+        });
+
+        this.client.once("error", (error) => {
+          this.connected = false;
+          this.lastError =
+            error?.message || String(error);
+          this.lastEvent = "error";
+
+          console.error(
+            "[Minecraft] error:",
+            this.lastError
+          );
+
+          finish(reject, error);
+        });
+
+        this.client.once("disconnect", (packet) => {
+          this.connected = false;
+          this.lastEvent = "disconnected";
+
+          console.log(
+            "[Minecraft] disconnected",
+            packet
+          );
+
+          if (!settled) {
+            finish(
+              reject,
+              new Error("Disconnected before connection completed")
+            );
+          }
+        });
+      });
+
+      return {
+        connected: true,
+        host: this.config.minecraft.host,
+        port: this.config.minecraft.port
+      };
+
+    } catch (error) {
       this.connected = false;
-      console.log("[Minecraft] disconnected", packet);
-    });
+      this.connecting = false;
 
-    this.client.on("error", (error) => {
-      console.error("[Minecraft] error:", error);
-    });
+      this.lastError =
+        error?.message || String(error);
 
-    return {
-      connected: true,
-      host: this.config.minecraft.host,
-      port: this.config.minecraft.port
-    };
+      throw error;
+    }
   }
 
   status() {
     return {
       connected: this.connected,
+      connecting: this.connecting,
       host: this.config.minecraft.host,
       port: this.config.minecraft.port,
-      version: this.config.minecraft.version
+      version: this.config.minecraft.version,
+      lastEvent: this.lastEvent,
+      lastError: this.lastError
     };
   }
 }

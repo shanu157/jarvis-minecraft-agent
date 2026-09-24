@@ -13,7 +13,7 @@ export const config = {
   minecraft: {
     host: process.env.MC_HOST || "Void_SMP-6MTk.aternos.me",
     port: Number(process.env.MC_PORT || 63005),
-    version: process.env.MC_VERSION || "1.26.51.1"
+    version: process.env.MC_VERSION || "1.26.51"
   },
 
   apiKey: process.env.JARVIS_API_KEY || ""

@@ -10,5 +10,8 @@
   },
   "dependencies": {
     "bedrock-protocol": "^3.60.1"
+  },
+  "allowScripts": {
+    "raknet-native": true
   }
 }
